@@ -536,6 +536,49 @@ def SIP_ExportFBXCharacter(exportNode):
 #
 ######################################
 
+######################################
+#
+# Model UI Procs
+#
+######################################
+
+# PURPOSE:           Populate the root joints panel in the model tab.
+# PROCEDURE:         It will search for the origin. If none found, list all joints in the scene.
+# PRESUMPTIONS:      Origin is going to be a joint. Rigs are not referenced in.
+def SIP_FBXExporterUI_PopulateModelRootJointsPanel():
+    cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", edit=True, removeAll=True)
+    origin = SIP_ReturnOrigin("")
+
+    if origin != "Error":
+        cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", edit=True, ebg=False, append=origin)
+    else:
+        joints = cmds.ls(type="joint")
+        for curJoint in joints:
+            cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", edit=True, bgc=[1, 0.1, 0.1],
+                                append=curJoint)
+
+######################################
+#
+# Animation UI Procs
+#
+######################################
+
+# PURPOSE:          To populate the actor panel in the UI.
+# PROCEDURE:        Get list of all references in the scene. For each reference, get the namespace .
+#                   Call SIP_ReturnOrigin for each namespace. If not "Error", add namespace to textScrollList.
+# PRESUMPTIONS:     Single-layered referencing. References have namespace.
+def SIP_FBXExporterUI_PopulateAnimationActorPanel():
+    cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", edit=True, removeAll=True)
+    references = cmds.file(query=True, reference=True)
+
+    for curRef in references:
+        if not cmds.file(curRef, query=True, deferReference=True):
+            ns = cmds.file(curRef, query=True, namespace=True)
+            origin = SIP_ReturnOrigin(ns)
+
+            if origin != "Error":
+                cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", edit=True, append=ns)
+
 
 # Make UI
 def SIP_FBXExporter_UI():
@@ -615,16 +658,61 @@ def SIP_FBXExporter_UI():
     cmds.button("sip_FBXExporter_window_animationExportAllAnimationsButton", width=300, height=50,
                 label="Export All Animations", parent="sip_FBXExporter_window_animationFormLayout")
 
+    cmds.popupMenu("sip_FBXExporter_window_animationExportNodesPopupMenu", button=3,
+                   parent="sip_FBXExporter_window_animationExportNodesTextScrollList")
+    cmds.menuItem("sip_FBXExporter_window_animationSelectNodeMenuItem", label="Select",
+                  parent="sip_FBXExporter_window_animationExportNodesPopupMenu")
+    cmds.menuItem("sip_FBXExporter_window_animationRenameNodeMenuItem", label="Rename",
+                  parent="sip_FBXExporter_window_animationExportNodesPopupMenu")
+    cmds.menuItem("sip_FBXExporter_window_animationDeleteNodeMenuItem", label="Delete",
+                  parent="sip_FBXExporter_window_animationExportNodesPopupMenu")
+
     # Create model UI elements.
-    cmds.frameLayout("sip_FBXExporter_window_modelFrameLayout", collapse=False, label="", borderVisible=False,
+    cmds.frameLayout("sip_FBXExporter_window_modelFormLayout", collapse=False, label="", borderVisible=False,
                      parent="sip_FBXExporter_window_tabLayout")
     cmds.formLayout("sip_FBXExporter_window_modelFormLayout", numberOfDivisions=100,
-                    parent="sip_FBXExporter_window_modelFrameLayout")
+                    parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", width=175, height=220, numberOfRows=18,
+                        allowMultiSelection=False, parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", width=175, height=220,
+                        numberOfRows=18, allowMultiSelection=False, parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.textScrollList("sip_FBXExporter_window_modelsGeomTextScrollList", width=175, height=220, numberOfRows=18,
+                        allowMultiSelection=True, parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.button("sip_FBXExporter_window_modelTagAsOriginButton", width=175, height=50, label="Tag as Origin",
+                parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.button("sip_FBXExporter_window_modelNewExportNodeButton", width=175, height=50, label="New Export Node",
+                parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.button("sip_FBXExporter_window_modelAddRemoveMeshesButton", width=175, height=50, label="Add/Remove Meshes",
+                parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.checkBoxGrp("sip_FBXExporter_window_modelExportCheckBoxGrp", numberOfCheckBoxes=1, label="Export",
+                     columnWidth2=[85, 70], enable=False, parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.text("sip_FBXExporter_window_modelOriginText", label="Root Joints",
+              parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.text("sip_FBXExporter_window_modelExportNodesText", label="Export Nodes",
+              parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.text("sip_FBXExporter_window_modelsMeshesText", label="Meshes",
+              parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.textFieldButtonGrp("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp",
+                            label="Export File Name", columnWidth3=[100, 300, 30], enable=False, text='',
+                            buttonLabel="Browse", parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.button("sip_FBXExporter_window_modelExportMeshButton", width=175, height=50, label="Export Selected Character",
+                parent="sip_FBXExporter_window_modelFormLayout")
+    cmds.button("sip_FBXExporter_window_modelExportAllMeshesButton", width=250, height=50,
+                label="Export All Characters", parent="sip_FBXExporter_window_modelFormLayout")
+
+    cmds.popupMenu("sip_FBXExporter_window_modelExportNodesPopupMenu", button=3,
+                   parent="sip_FBXExporter_window_modelsExportNodesTextScrollList")
+    cmds.menuItem("sip_FBXExporter_window_modelSelectNodeMenuItem", label="Select",
+                  parent="sip_FBXExporter_window_modelExportNodesPopupMenu")
+    cmds.menuItem("sip_FBXExporter_window_modelRenameNodeMenuItem", label="Rename",
+                  parent="sip_FBXExporter_window_modelExportNodesPopupMenu")
+    cmds.menuItem("sip_FBXExporter_window_modelDeleteNodeMenuItem", label="Delete",
+                  parent="sip_FBXExporter_window_modelExportNodesPopupMenu")
 
     # Set up tabs
     cmds.tabLayout("sip_FBXExporter_window_tabLayout", edit = True,
                    tabLabel=(("sip_FBXExporter_window_animationFrameLayout", "Animation"),
-                             ("sip_FBXExporter_window_modelFrameLayout", "Model")))
+                             ("sip_FBXExporter_window_modelFormLayout", "Model")))
 
     # Set up animation form layout.
     cmds.formLayout("sip_FBXExporter_window_animationFormLayout", edit=True,
@@ -717,8 +805,84 @@ def SIP_FBXExporter_UI():
                      ("sip_FBXExporter_window_animationExportAllAnimationsButton", 'left', 100,
                       "sip_FBXExporter_window_animationExportNodesTextScrollList")])
 
+    # Set up model form layout.
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit=True,
+                    attachForm=
+                    [("sip_FBXExporter_window_modelOriginText", 'top', 5),
+                     ("sip_FBXExporter_window_modelOriginText", 'left', 5),
+                     ("sip_FBXExporter_window_modelExportNodesText", 'top', 5),
+                     ("sip_FBXExporter_window_modelsMeshesText", 'top', 5),
+                     ("sip_FBXExporter_window_modelsMeshesText", 'top', 5),
+                     ("sip_FBXExporter_window_modelExportCheckBoxGrp", 'top', 25),
+                     ("sip_FBXExporter_window_modelTagAsOriginButton", 'left', 5),])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelExportNodesText", 'left', 125,
+                      "sip_FBXExporter_window_modelOriginText"),
+                     ("sip_FBXExporter_window_modelsMeshesText", 'left', 120,
+                      "sip_FBXExporter_window_modelExportNodesText")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelsOriginTextScrollList", 'top', 5,
+                      "sip_FBXExporter_window_modelOriginText"),
+                     ("sip_FBXExporter_window_modelsExportNodesTextScrollList", 'top', 5,
+                      "sip_FBXExporter_window_modelExportNodesText"),
+                     ("sip_FBXExporter_window_modelsGeomTextScrollList", 'top', 5,
+                      "sip_FBXExporter_window_modelsMeshesText")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelsExportNodesTextScrollList", 'left', 5,
+                      "sip_FBXExporter_window_modelsOriginTextScrollList"),
+                     ("sip_FBXExporter_window_modelsGeomTextScrollList", 'left', 5,
+                      "sip_FBXExporter_window_modelsExportNodesTextScrollList")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelNewExportNodeButton", 'left', 5,
+                      "sip_FBXExporter_window_modelsOriginTextScrollList"),
+                     ("sip_FBXExporter_window_modelNewExportNodeButton", 'top', 5,
+                      "sip_FBXExporter_window_modelsExportNodesTextScrollList")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp", 'left', 5,
+                      "sip_FBXExporter_window_modelsGeomTextScrollList"),
+                     ("sip_FBXExporter_window_modelTagAsOriginButton", 'top', 5,
+                      "sip_FBXExporter_window_modelsOriginTextScrollList")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelExportMeshButton", 'top', 15,
+                      "sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp"),
+                     ("sip_FBXExporter_window_modelExportMeshButton", 'left', 125,
+                      "sip_FBXExporter_window_modelsGeomTextScrollList")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelAddRemoveMeshesButton", 'top', 5,
+                      "sip_FBXExporter_window_modelsGeomTextScrollList"),
+                     ("sip_FBXExporter_window_modelAddRemoveMeshesButton", 'left', 5,
+                      "sip_FBXExporter_window_modelNewExportNodeButton")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelExportAllMeshesButton", 'top', 5,
+                      "sip_FBXExporter_window_modelExportMeshButton"),
+                     ("sip_FBXExporter_window_modelExportAllMeshesButton", 'left', 125,
+                      "sip_FBXExporter_window_modelsGeomTextScrollList")])
+    cmds.formLayout("sip_FBXExporter_window_modelFormLayout", edit= True,
+                    attachControl=
+                    [("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp", 'top', 5,
+                      "sip_FBXExporter_window_modelExportCheckBoxGrp"),
+                     ("sip_FBXExporter_window_modelExportCheckBoxGrp", 'left', 125,
+                      "sip_FBXExporter_window_modelsGeomTextScrollList")])
 
+    # Populate ui
+    SIP_FBXExporterUI_PopulateModelRootJointsPanel()
+    SIP_FBXExporterUI_PopulateAnimationActorPanel()
 
+    # scriptJob to refresh ui
+    cmds.scriptJob(parent="sip_FBXExporter_window",
+                   e=["PostSceneRead", "import FBXAnimationExporter as FBX\n"
+                                       "FBX.SIP_FBXExporterUI_PopulateModelRootJointsPanel()"])
+    cmds.scriptJob(parent="sip_FBXExporter_window",
+                   e=["PostSceneRead", "import FBXAnimationExporter as FBX\n"
+                                       "FBX.SIP_FBXExporterUI_PopulateAnimationActorPanel()"])
 
 
 
