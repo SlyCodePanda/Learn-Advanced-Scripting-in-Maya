@@ -557,6 +557,112 @@ def SIP_FBXExporterUI_PopulateModelRootJointsPanel():
             cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", edit=True, bgc=[1, 0.1, 0.1],
                                 append=curJoint)
 
+# PURPOSE:          Populate the geometry panel.
+# PROCEDURE:        Clear out the geom textScollList. Get selected export node. Get meshes with
+#                   SIP_ReturnConnectedMeshes. Iterate through the list, add each item to geom textScrollList.
+# PRESUMPTIONS:     Selected export node is a valid object.
+def SIP_FBXExporterUI_PopulateGeomPanel():
+    cmds.textScrollList("sip_FBXExporter_window_modelsGeomTextScrollList", edit=True, removeAll=True)
+    exportNode = cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", query=True,
+                                     selectItem=True)
+    meshes = SIP_ReturnConnectedMeshes(exportNode[0])
+
+    if meshes:
+        for curMesh in meshes:
+            cmds.textScrollList("sip_FBXExporter_window_modelsGeomTextScrollList", edit=True, append=curMesh)
+
+# PURPOSE:          Tag a joint to be an origin.
+# PROCEDURE:        Get joint from the textScrollList of origins, call SIP_TagForOrigin,
+#                   repopulate model root joint panel.
+# PRESUMPTIONS:     Item in the textScrollList is valid.
+def SIP_FBXExporterUI_ModelTagForOrigin():
+    joints = cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", query=True, selectItem=True)
+    SIP_TagForOrigin(joints[0])
+    SIP_FBXExporterUI_PopulateModelRootJointsPanel()
+
+# PURPOSE:          Populate the export nodes panel with fbx export nodes connected to the origin.
+# PROCEDURE:        Get origin from OriginTextScrollList, call SIP_ReturnFBXExportNodes,
+#                   populate ModelExportNodesTextScrollList with list from that proc.
+# PRESUMPTIONS:     None.
+def SIP_FBXExporterUI_PopulateModelsExportNodesPanel():
+    origin = cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", query=True, selectItem=True)
+    cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", edit=True, removeAll=True)
+
+    if origin:
+        exportNodes = SIP_ReturnFBXExportNodes(origin[0])
+
+        if exportNodes:
+            for cur in exportNodes:
+                cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", edit=True, append=cur)
+
+# PURPOSE:          To create new export node and add to Model export node panel.
+# PROCEDURE:        Get origin from modelsOriginTextScrollList, call SIP_CreateFBXExportNode, connect to origin,
+#                   repopulate ModelsExportNodesPanel.
+# PRESUMPTION:      None.
+def SIP_FBXExporterUI_ModelCreateNewExportNode():
+    origin = cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", query=True, selectItem=True)
+
+    if origin[0] != "Error":
+        exportNode = SIP_CreateFBXExportNode(origin[0])
+
+        if exportNode:
+            SIP_ConnectFBXExportNodeToOrigin(exportNode, origin[0])
+            SIP_FBXExporterUI_PopulateModelsExportNodesPanel()
+
+# PURPOSE:          Connect and disconnect meshes from the export node and update geom panel.
+# PROCEDURE:        Get export node from textScrollList, get selected meshes from textScrollList, if list of selected
+#                   meshes is not empty, call SIP_DisconnectFBXExportNodeToMeshes with list.
+#                   If list is empty, call SIP_ConnectFBXExportNodeToMeshes.
+#                   Repopulate Geom panel.
+# PRESUMPTION:      None.
+def SIP_FBXExporterUI_ModelAddRemoveMeshes():
+    exportNode = cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", query=True,
+                                     selectItem=True)
+    meshes = cmds.textScrollList("sip_FBXExporter_window_modelsGeomTextScrollList", query=True, selectItem=True)
+
+    if exportNode:
+        if meshes:
+            SIP_DisconnectFBXExporterNodeToMeshes(exportNode[0], meshes)
+        else:
+            sel = cmds.ls(selection=True)
+            if sel:
+                SIP_ConnectFBXExportNodeToMeshes(exportNode[0], sel)
+
+        SIP_FBXExporterUI_PopulateGeomPanel()
+
+# PURPOSE:          Populate the UI with the export settings stored in the selected export node.
+# PROCEDURE:        Get the selected export node from the exportNodeScrollList. Unlock UI settings and set them
+#                   according to the values in the selected export node.
+# PRESUMPTION:      Selected export node is a valid object.
+def SIP_FBXExporterUI_UpdateModelExportSettings():
+    exportNodes = cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", query=True,
+                                      selectItem=True)
+    cmds.textFieldButtonGrp("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp", edit=True, enable=True,
+                            text="")
+
+    SIP_AddFBXNodeAttrs(exportNodes[0])
+
+    if exportNodes:
+        cmds.textFieldButtonGrp("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp", edit=True,
+                                text=cmds.getAttr(exportNodes[0] + ".exportName"))
+        cmds.checkBoxGrp("sip_FBXExporter_window_modelExportCheckBoxGrp", edit=True, enable=True,
+                         value1=cmds.getAttr(exportNodes[0] + ".export"))
+
+# PURPOSE:          Update the selected export node with the options set in the UI.
+# PROCEDURE:        Read in the values of the UI and call setAttr on the selected export node.
+# PRESUMPTION:      Selected export node is valid and has the needed attributes.
+def SIP_FBXExporterUI_UpdateExportNodeFromModelSettings():
+    exportNodes = cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", query=True,
+                                      selectItem=True)
+
+    if exportNodes:
+        cmds.setAttr(exportNodes[0] + ".exportName",
+                     cmds.textFieldButtonGrp("SIP_FBXExporter_window_modelExportFieldNameTextFieldButtonGrp",
+                                             query=True, text=True),
+                     type="string")
+        cmds.setAttr(exportNodes[0] + ".export", cmds.checkBoxGrp("sip_FBXExporter_window_modelExportCheckBoxGrp",
+                                                                  query=True, value1=True))
+
 ######################################
 #
 # Animation UI Procs
@@ -579,6 +685,66 @@ def SIP_FBXExporterUI_PopulateAnimationActorPanel():
             if origin != "Error":
                 cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", edit=True, append=ns)
 
+######################################
+#
+# Help Windows
+#
+######################################
+
+def SIP_FBXExporter_AnimationHelpWindow():
+    if cmds.window("sip_FBXExporter_animationHelpWindow", exists=True):
+        cmds.deleteUI("sip_FBXExporter_animationHelpWindow")
+
+    cmds.window("sip_FBXExporter_animationHelpWindow", s=True, width=500, height=500, menuBar=True,
+                title="Help on Animation Export")
+    cmds.paneLayout(configuration='horizontal4')
+    cmds.scrollField(editable=False, wordWrap=True,
+                     text="Animation Export: \nAnimation export assumes single-level referencing with proper namesapce."
+                          "\n\nActors: \nAll referenced characters with a origin joint tagged with the origin "
+                          "attributewill be listed in the Actor's field by their namespace. Please see the modeling "
+                          "help window for how to tage a character's origin with the origin attribute.\n\nExport "
+                          "Nodes:\nThe Export Nodes panel will fill in with export nodes connected to the origin of "
+                          "the selected actor from the Actor's field. Clicking on the New Export Node will create a "
+                          "new node. Each export node represents a seperate animation.\n\nExport:\nThe Export flag "
+                          "means the current export node will be available for export. All nodes wihtout this checked "
+                          "will not be exported.\n\nMove to origin:\nNot yet supported\n\nSub Range:\nTurn this on "
+                          "to enable the sub-range option for the selected node. This will enable the Start Frame and "
+                          "End Frame fields where you can set the range for the specified animation. Otherwise, "
+                          "the animation will use the frame range of the file.\n\nExport File Name:\nClick on the "
+                          "Browse button to browse to where you want the file to go. The path will be project "
+                          "relative.\n\nExport Selected Animation:\nClick this button to export the animation "
+                          "selected in Export Nodes\n\nExport All Animations For Selected Character:\nClick this "
+                          "button to export all animations for the selected actor in the Actors filed. This flag "
+                          "will ignore what is selected in Export Nodes and export from all found nodes for the "
+                          "character\n\nExport All Animations:\nClick this button to export all animations for all "
+                          "characters. All selections will be ignored")
+
+    cmds.showWindow("sip_FBXExporter_animationHelpWindow")
+
+def SIP_FBXExporter_ModelHelpWindow():
+    if cmds.window("sip_FBXExporter_modelHelpWindow", exists=True):
+        cmds.deleteUI("sip_FBXExporter_modelHelpWindow")
+
+    cmds.window("sip_FBXExporter_modelHelpWindow", s=True, width=500, height=500, menuBar=True,
+                title="Help on Model Export")
+    cmds.paneLayout(configuration='horizontal4')
+    cmds.scrollField(editable=False, wordWrap=True,
+                     text="Model Export: \nModel exporter assumes one skeleton for export. Referencing for model "
+                          "export is not supported\n\nRoot Joints: \nPanel will list all the joints tagged with the "
+                          "\"origin\" attribute. If no joint is tagged with the attribute, it will list all joints "
+                          "in the scene and turn red. Select the root joint and click the Tag as Origin button."
+                          "\n\nExport Nodes:\nThe Export Nodes panel will fill in with export nodes connected to "
+                          "the origin of the selected actor from the Actor's field. Clicking on the New Export Node "
+                          "will create a new node. Each export node represents a seperate character export (for "
+                          "example, seperate LOD's).\n\nMeshes:\nThe Meshes panel shows all the geometry associated "
+                          "with the selected export node. This can be used if you have mesh variations skinned to "
+                          "the same rig or LOD's.\n\nExport File Name:\nClick on the Browse button to browse to "
+                          "where you want the file to go. The path will be project relative.\n\nExport Selected "
+                          "Character:\nClick this button to export the character selected in Export Nodes\n\nExport "
+                          "All Characters:\nClick this button to export all character definitions for the skeleton."
+                          " All selections will be ignored")
+
+    cmds.showWindow("sip_FBXExporter_modelHelpWindow")
 
 # Make UI
 def SIP_FBXExporter_UI():
@@ -593,8 +759,12 @@ def SIP_FBXExporter_UI():
     cmds.menuItem(label="Reset Settings", parent="sip_FBXExporter_window_editMenu")
 
     cmds.menu("sip_FBXExporter_window_helpMenu", label="Edit")
-    cmds.menuItem(label="Help on Animation Export", parent="sip_FBXExporter_window_helpMenu")
-    cmds.menuItem(label="Help on Model Export", parent="sip_FBXExporter_window_helpMenu")
+    cmds.menuItem(label="Help on Animation Export",
+                  command="import FBXAnimationExporter as FBX\nSIP_FBXExporter_AnimationHelpWindow",
+                  parent="sip_FBXExporter_window_helpMenu")
+    cmds.menuItem(label="Help on Model Export",
+                  command="import FBXAnimationExporter as FBX\nSIP_FBXExporter_ModelHelpWindow",
+                  parent="sip_FBXExporter_window_helpMenu")
 
     # Create main tab layout.
     cmds.formLayout("sip_FBXExporter_window_mainForm")
@@ -673,19 +843,30 @@ def SIP_FBXExporter_UI():
     cmds.formLayout("sip_FBXExporter_window_modelFormLayout", numberOfDivisions=100,
                     parent="sip_FBXExporter_window_modelFormLayout")
     cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", width=175, height=220, numberOfRows=18,
-                        allowMultiSelection=False, parent="sip_FBXExporter_window_modelFormLayout")
+                        allowMultiSelection=False,
+                        sc="import FBXAnimationExporter as FBX\n"
+                        "SIP_FBXExporterUI_PopulateModelsExportNodesPanel()",
+                        parent="sip_FBXExporter_window_modelFormLayout")
     cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", width=175, height=220,
-                        numberOfRows=18, allowMultiSelection=False, parent="sip_FBXExporter_window_modelFormLayout")
+                        numberOfRows=18, allowMultiSelection=False,
+                        sc="import FBXAnimationExporter as FBX\n"
+                        "SIP_FBXExporterUI_PopulateGeomPanel()\nSIP_FBXExporterUI_UpdateModelExportSettings()",
+                        parent="sip_FBXExporter_window_modelFormLayout")
     cmds.textScrollList("sip_FBXExporter_window_modelsGeomTextScrollList", width=175, height=220, numberOfRows=18,
                         allowMultiSelection=True, parent="sip_FBXExporter_window_modelFormLayout")
     cmds.button("sip_FBXExporter_window_modelTagAsOriginButton", width=175, height=50, label="Tag as Origin",
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ModelTagForOrigin",
                 parent="sip_FBXExporter_window_modelFormLayout")
     cmds.button("sip_FBXExporter_window_modelNewExportNodeButton", width=175, height=50, label="New Export Node",
-                parent="sip_FBXExporter_window_modelFormLayout")
+                parent="sip_FBXExporter_window_modelFormLayout",
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ModelCreateNewExportNode()")
     cmds.button("sip_FBXExporter_window_modelAddRemoveMeshesButton", width=175, height=50, label="Add/Remove Meshes",
+                command="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_ModelAddRemoveMeshes()",
                 parent="sip_FBXExporter_window_modelFormLayout")
     cmds.checkBoxGrp("sip_FBXExporter_window_modelExportCheckBoxGrp", numberOfCheckBoxes=1, label="Export",
-                     columnWidth2=[85, 70], enable=False, parent="sip_FBXExporter_window_modelFormLayout")
+                     columnWidth2=[85, 70], enable=False,
+                     cc="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_UpdateExportNodeFromModelSettings()",
+                     parent="sip_FBXExporter_window_modelFormLayout")
     cmds.text("sip_FBXExporter_window_modelOriginText", label="Root Joints",
               parent="sip_FBXExporter_window_modelFormLayout")
     cmds.text("sip_FBXExporter_window_modelExportNodesText", label="Export Nodes",
@@ -693,7 +874,10 @@ def SIP_FBXExporter_UI():
     cmds.text("sip_FBXExporter_window_modelsMeshesText", label="Meshes",
               parent="sip_FBXExporter_window_modelFormLayout")
     cmds.textFieldButtonGrp("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp",
-                            label="Export File Name", columnWidth3=[100, 300, 30], enable=False, text='',
+                            label="Export File Name",
+                            cc="import FBXAnimationExporter as FBX\n"
+                               "SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
+                            columnWidth3=[100, 300, 30], enable=False, text='',
                             buttonLabel="Browse", parent="sip_FBXExporter_window_modelFormLayout")
     cmds.button("sip_FBXExporter_window_modelExportMeshButton", width=175, height=50, label="Export Selected Character",
                 parent="sip_FBXExporter_window_modelFormLayout")
@@ -879,10 +1063,10 @@ def SIP_FBXExporter_UI():
     # scriptJob to refresh ui
     cmds.scriptJob(parent="sip_FBXExporter_window",
                    e=["PostSceneRead", "import FBXAnimationExporter as FBX\n"
-                                       "FBX.SIP_FBXExporterUI_PopulateModelRootJointsPanel()"])
+                                       "SIP_FBXExporterUI_PopulateModelRootJointsPanel()"])
     cmds.scriptJob(parent="sip_FBXExporter_window",
                    e=["PostSceneRead", "import FBXAnimationExporter as FBX\n"
-                                       "FBX.SIP_FBXExporterUI_PopulateAnimationActorPanel()"])
+                                       "SIP_FBXExporterUI_PopulateAnimationActorPanel()"])
 
 
 
