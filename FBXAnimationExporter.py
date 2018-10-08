@@ -365,7 +365,7 @@ def SIP_SetAnimLayerSettings(exportNode):
     if not cmds.attributeQuery("animLayers", node=exportNode, exists=True):
         SIP_AddFBXNodeAttrs(exportNode)
 
-    animLayers = cmds.ls(type="animLayers")
+    animLayers = cmds.ls(type="animLayer")
     animLayerCommandStr = ""
 
     for curLayer in animLayers:
@@ -373,10 +373,7 @@ def SIP_SetAnimLayerSettings(exportNode):
         solo = cmds.animLayer(curLayer, query=True, solo=True)
         animLayerCommandStr += (curLayer + ",  mute = " + str(mute) + ", solo = " + str(solo) + ";")
 
-    cmds.setAttr(exportNode + "animLayers", animLayerCommandStr, type="string")
-
-
-
+    cmds.setAttr(exportNode + ".animLayers", animLayerCommandStr, type="string")
 
 # PURPOSE:          Set the animLayers based on the string value in the exportNode.
 # PROCEDURE:        Use the predefined sentinel values to split the string for the separate animLayers.
@@ -386,7 +383,7 @@ def SIP_SetAnimLayerSettings(exportNode):
 #                   Uses = as sentinel value to split separate attrs from their values in field.
 #                   Order is Layer, mute, solo.
 def SIP_SetAnimLayersFromSettings(exportNode):
-    if cmds.objExists(exportNode) and not cmds.objExists(exportNode + ".animLayers"):
+    if cmds.objExists(exportNode) and cmds.objExists(exportNode + ".animLayers"):
         animLayersRootString = cmds.getAttr(exportNode + ".animLayers", asString=True)
 
         if animLayersRootString:
@@ -395,14 +392,15 @@ def SIP_SetAnimLayersFromSettings(exportNode):
             for curEntry in animLayerEntries:
                 if curEntry:
                     fields = curEntry.split(",")
+
                     animLayerField = fields[0]
                     curMuteField = fields[1]
                     curSoloField = fields[2]
 
                     muteFieldStr = curMuteField.split(" = ")
-                    soloFieldStr = curSoloField.split(" = ")
+                    soloFieldStr = curMuteField.split(" = ")
 
-                    # Convert string to bool values.
+                    # convert strings to bool values
                     muteFieldBool = True
                     soloFieldBool = True
 
@@ -412,17 +410,10 @@ def SIP_SetAnimLayersFromSettings(exportNode):
                     if soloFieldStr[1] != "True":
                         soloFieldBool = False
 
-                cmds.animLayer(animLayerField, edit=True, mute=muteFieldBool, solo=soloFieldBool)
-
-
-
-
+                    cmds.animLayer(animLayerField, edit=True, mute=muteFieldBool, solo=soloFieldBool)
 
 def SIP_ClearAnimLayerSettings(exportNode):
     cmds.setAttr(exportNode + ".animLayers", "", type="string")
-
-
-
 
 ######################################
 #
@@ -430,19 +421,16 @@ def SIP_ClearAnimLayerSettings(exportNode):
 #
 ######################################
 
-
-
 def SIP_ExportFBX(exportNode):
     curWorkspace = cmds.workspace(q=True, rd=True)
     fileName = cmds.getAttr(exportNode + ".exportName")
 
     if fileName:
         newFBX = curWorkspace + fileName
+        #newFBX = fileName
         cmds.file(newFBX, force=True, type='FBX export', pr=True, es=True)
     else:
         cmds.warning("No Valid Export Filename for Export Node " + exportNode + "\n")
-
-
 
 def SIP_ExportFBXAnimation(characterName, exportNode):
     SIP_ClearGarbage()
@@ -470,7 +458,9 @@ def SIP_ExportFBXAnimation(characterName, exportNode):
             exportNodes = SIP_ReturnFBXExportNodes(origin)
 
         for curExportNode in exportNodes:
-            if cmds.getAttr(curExportNode + ".export") and origin != "Error":
+            test = SIP_ReturnConnectedMeshes(curExportNode)
+
+            if cmds.getAttr(curExportNode + ".export") and origin != "Error" and not test:
                 exportRig = SIP_CopyAndConnectSkeleton(origin)
 
                 startFrame = cmds.playbackOptions(query=True, minTime=1)
@@ -749,13 +739,13 @@ def SIP_FBXExporterUI_UpdateAnimationExportSettings():
                          value1=cmds.getAttr(exportNodes[0] + ".useSubRange"))
 
         if cmds.getAttr(exportNodes[0] + ".useSubRange"):
-            cmds.floatFieldGrp("sip_FBXExporter_window_animationStartFrameFloatGrp", edit=True, enable=True,
+            cmds.floatFieldGrp("sip_FBXExporter_window_animationStartFrameFloatFieldGrp", edit=True, enable=True,
                                value1=cmds.getAttr(exportNodes[0] + ".startFrame"))
-            cmds.floatFieldGrp("sip_FBXExporter_window_animationEndFrameFloatGrp", edit=True, enable=True,
+            cmds.floatFieldGrp("sip_FBXExporter_window_animationEndFrameFloatFieldGrp", edit=True, enable=True,
                                value1=cmds.getAttr(exportNodes[0] + ".endFrame"))
         else:
-            cmds.floatFieldGrp("sip_FBXExporter_window_animationStartFrameFloatGrp", edit=True, enable=False)
-            cmds.floatFieldGrp("sip_FBXExporter_window_animationEndFrameFloatGrp", edit=True, enable=False)
+            cmds.floatFieldGrp("sip_FBXExporter_window_animationStartFrameFloatFieldGrp", edit=True, enable=False)
+            cmds.floatFieldGrp("sip_FBXExporter_window_animationEndFrameFloatFieldGrp", edit=True, enable=False)
 
         if cmds.getAttr(exportNodes[0] + ".moveToOrigin"):
             cmds.checkBoxGrp("sip_FBXExporter_window_animationZeroOriginMotionCheckBoxGrp", edit=True, enable=True,
@@ -772,9 +762,45 @@ def SIP_FBXExporterUI_UpdateAnimationExportSettings():
             cmds.button("sip_FBXExporter_window_animationRecordAnimLayersButton", edit=True, enable=True,
                         label="Record Anim Layers", backgroundColor=[1.0, 0.25, 0.25])
 
+        cmds.button("sip_FBXExporter_window_animationClearAnimLayersButton", edit=True, enable=True)
+        cmds.button("sip_FBXExporter_window_animationPreviewAnimLayersButton", edit=True, enable=True)
+
         cmds.textFieldGrp("sip_FBXExporter_window_animationExportFileNameTextFieldButtonGrp", edit=True, enable=True,
                           text=cmds.getAttr(exportNodes[0] + ".exportName"))
 
+# PURPOSE:          To update the selected Export Node with the settings in the UI.
+# PROCEDURE:        Get Export Node from textScrollList. Update export node attributes. setAttrs according to values
+#                   queried in UI.
+# PRESUMPTION:      None.
+def SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings():
+    exportNodes = cmds.textScrollList("sip_FBXExporter_window_animationExportNodesTextScrollList", query=True,
+                                      selectItem=True)
+
+    if exportNodes and cmds.objExists(exportNodes[0]):
+        SIP_AddFBXNodeAttrs(exportNodes[0])
+        cmds.setAttr(exportNodes[0] + ".export", cmds.checkBoxGrp("sip_FBXExporter_window_animationExportCheckBoxGrp",
+                                                                  query=True, value1=True))
+        cmds.setAttr(exportNodes[0] + ".moveToOrigin",
+                     cmds.checkBoxGrp("sip_FBXExporter_window_animationZeroOriginCheckBoxGrp",
+                                      query=True, value1=True))
+        cmds.setAttr(exportNodes[0] + ".zeroOrigin",
+                     cmds.checkBoxGrp("sip_FBXExporter_window_animationZeroOriginMotionCheckBoxGrp",
+                                      query=True, value1=True))
+        cmds.setAttr(exportNodes[0] + ".useSubRange",
+                     cmds.checkBoxGrp("sip_FBXExporter_window_animationSubRangeCheckBoxGrp",
+                                      query=True, value1=True))
+
+        if cmds.getAttr(exportNodes[0] + ".useSubRange"):
+            cmds.setAttr(exportNodes[0] + ".startFrame",
+                         cmds.floatFieldGrp("sip_FBXExporter_window_animationStartFrameFloatFieldGrp", query=True,
+                                            value1=True))
+            cmds.setAttr(exportNodes[0] + ".endFrame",
+                         cmds.floatFieldGrp("sip_FBXExporter_window_animationEndFrameFloatFieldGrp", query=True,
+                                            value1=True))
+
+        cmds.setAttr(exportNodes[0] + ".exportName",
+                     cmds.textFieldButtonGrp("sip_FBXExporter_window_animationExportFileNameTextFieldButtonGrp",
+                                             query=True, text=True), type="string")
 
 # PURPOSE:          Create a new export node and connect it to the origin of the character selected in a
 #                   actorsTextScrollList.
@@ -795,6 +821,70 @@ def SIP_FBXExporterUI_AnimationCreateNewExportNode():
                 SIP_ConnectFBXExportNodeToOrigin(exportNode, origin)
                 SIP_FBXExporterUI_PopulateAnimationExportNodesPanel()
 
+
+def SIP_FBXExporterUI_ExportSelectedAnimation():
+    exportNodes = cmds.textScrollList("sip_FBXExporter_window_animationExportNodesTextScrollList", query=True,
+                                      selectItem=True)
+    ns = cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", query=True, selectItem=True)
+
+    if exportNodes and ns:
+        SIP_ExportFBXAnimation(ns[0], exportNodes[0])
+
+def SIP_FBXExporterUI_ExportAllAnimationForSelectedCharacter():
+    ns = cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", query=True, selectItem=True)
+
+    SIP_ExportFBXAnimation(ns[0], "")
+
+def SIP_FBXExporterUI_ExportAllAnimation():
+    ns = cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", query=True, allItems=True)
+
+    for curChar in ns:
+        origin = SIP_ReturnOrigin(curChar)
+
+        if origin != "Error":
+            SIP_ExportFBXAnimation(curChar, "")
+
+######################################
+#
+# AnimLayers UI Procs
+#
+######################################
+
+# PURPOSE:          Set the animLayer attribute on the selected export node.
+# PROCEDURE:        Get selected export node from the UI. Call SIP_SetAnimLayerSettings. Reset the button.
+# PRESUMPTION:      Multiselection on textScrollList is off.
+def SIP_FBXExporterUI_RecordAnimLayers():
+    exportNodes = cmds.textScrollList("sip_FBXExporter_window_animationExportNodesTextScrollList", query=True,
+                                      selectItem=True)
+
+    if exportNodes and cmds.objExists(exportNodes[0]):
+        SIP_SetAnimLayerSettings(exportNodes[0])
+        cmds.button("sip_FBXExporter_window_animationRecordAnimLayersButton", edit=True, label="Re-Record Anim Layers",
+                    backgroundColor=[0.250, 0.25, 1.25])
+
+# PURPOSE:          Set the animLayers according to the selected export node.
+# PROCEDURE:        Get selected export node from UI. SIP_SetAnimLayersFromSettings.
+# PRESUMPTION:      Multiselection on textScrollList is off.
+def SIP_FBXExporterUI_PreviewAnimLayers():
+    exportNodes = cmds.textScrollList("sip_FBXExporter_window_animationExportNodesTextScrollList", query=True,
+                                      selectItem=True)
+
+    if exportNodes and cmds.objExists(exportNodes[0]):
+        SIP_SetAnimLayersFromSettings(exportNodes[0])
+
+# PURPOSE:          Blank out the animLayers string attribute in the selected export node.
+# PROCEDURE:        Get selected export node from UI. Call SIP_ClearAnimLayerSettings.
+#                   Reset the Record Anim Layers button.
+# PRESUMPTION:      Multiselection on textScrollList is off.
+def SIP_FBXExporterUI_ClearAnimLayers():
+    exportNodes = cmds.textScrollList("sip_FBXExporter_window_animationExportNodesTextScrollList", query=True,
+                                      selectItem=True)
+
+    if exportNodes and cmds.objExists(exportNodes[0]):
+        SIP_ClearAnimLayerSettings(exportNodes[0])
+        cmds.button("sip_FBXExporter_window_animationRecordAnimLayersButton", edit=True, label="Record Anim Layers",
+                    backgroundColor=[1.0, 0.25, 0.25])
+
 ######################################
 #
 # Generic UI Procs
@@ -809,7 +899,7 @@ def SIP_FBXExporterUI_BrowseExportFilename(flag):
     temp = ""
 
     if flag == 1:
-        temp = cmds.textFieldButtonGrp("sip_FBXExporter_window_animationFileNameTextFieldButtonGrp", query=True,
+        temp = cmds.textFieldButtonGrp("sip_FBXExporter_window_animationExportFileNameTextFieldButtonGrp", query=True,
                                        text=True)
     elif flag == 2:
         temp = cmds.textFieldButtonGrp("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp",
@@ -818,20 +908,18 @@ def SIP_FBXExporterUI_BrowseExportFilename(flag):
     project = cmds.workspace(q=True, rd=True)
     dirmask = project + "/" + temp
     newFileList = cmds.fileDialog2(fm=0, startingDirectory=dirmask, fileFilter="FBX export (*.fbx)")
-    print("NEW FILE LIST: " + str(newFileList))
     newFile = ""
 
     if newFileList:
         newFile = newFileList[0]
-        newFile = newFile.replace(newFile, project, '')
+        newFile = string.replace(newFile, project, '')
     else:
         newFile = temp
 
     if flag == 1:
-        cmds.textFieldButtonGrp("sip_FBXExporter_window_animationFileNameTextFieldButtonGrp", edit=True, text=newFile)
-        # add proc call to update export node from animation settings.
+        cmds.textFieldButtonGrp("sip_FBXExporter_window_animationExportFileNameTextFieldButtonGrp", edit=True, text=newFile)
+        SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()
     elif flag == 2:
-        print("NEW FILE: " + newFile)
         cmds.textFieldButtonGrp("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp", edit=True, text=newFile)
         SIP_FBXExporterUI_UpdateExportNodeFromModelSettings()
 
@@ -842,7 +930,7 @@ def SIP_FBXExporterUI_BrowseExportFilename(flag):
 def SIP_FBXExporterUI_SelectExportNode(uiElement):
     exportNodes = cmds.textScrollList(uiElement, query=True, selectItem=True)
 
-    if cmds.objExists(exportNodes[0]):
+    if exportNodes and cmds.objExists(exportNodes[0]):
         cmds.select(clear=True)
         cmds.select(exportNodes)
 
@@ -851,9 +939,11 @@ def SIP_FBXExporterUI_SelectExportNode(uiElement):
 # PRESUMPTION:      uiElement is a textScrollList, multiSelection is off.
 def SIP_FBXExporterUI_DeleteExportNode(uiElement):
     exportNodes = cmds.textScrollList(uiElement, query=True, selectItem=True)
-    SIP_DeleteFBXExportNode(exportNodes[0])
-    SIP_FBXExporterUI_PopulateAnimationExportNodesPanel()
-    SIP_FBXExporterUI_PopulateModelsExportNodesPanel()
+
+    if exportNodes and cmds.objExists(exportNodes[0]):
+        SIP_DeleteFBXExportNode(exportNodes[0])
+        SIP_FBXExporterUI_PopulateAnimationExportNodesPanel()
+        SIP_FBXExporterUI_PopulateModelsExportNodesPanel()
 
 # PURPOSE:          Generate window where we can enter text to rename selected export node.
 # PROCEDURE:        Create a new window. Get export node name from textScrollList
@@ -874,7 +964,7 @@ def SIP_FBXExporterUI_RenameExportNode_UI(uiElement):
     cmds.button("sip_FBXExporter_rename_renameButton", width=75, label="Rename",
                 parent="sip_FBXExporter_rename_formLayout",
                 command="import FBXAnimationExporter as FBX\n"
-                        "SIP_FBXExporterUI_RenameExportNode(\"" + exportNodes[0] + "\")")
+                        "FBX.SIP_FBXExporterUI_RenameExportNode(\"" + exportNodes[0] + "\")")
     cmds.button("sip_FBXExporter_rename_cancelButton", width=75, label="Cancel",
                 parent="sip_FBXExporter_rename_formLayout",
                 command="cmds.deleteUI(\"sip_FBXExporter_renameExportNode_window\")")
@@ -977,10 +1067,10 @@ def SIP_FBXExporter_UI():
 
     cmds.menu("sip_FBXExporter_window_helpMenu", label="Edit")
     cmds.menuItem(label="Help on Animation Export",
-                  command="import FBXAnimationExporter as FBX\nSIP_FBXExporter_AnimationHelpWindow",
+                  command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporter_AnimationHelpWindow",
                   parent="sip_FBXExporter_window_helpMenu")
     cmds.menuItem(label="Help on Model Export",
-                  command="import FBXAnimationExporter as FBX\nSIP_FBXExporter_ModelHelpWindow",
+                  command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporter_ModelHelpWindow",
                   parent="sip_FBXExporter_window_helpMenu")
 
     # Create main tab layout.
@@ -994,68 +1084,107 @@ def SIP_FBXExporter_UI():
                         ("sip_FBXExporter_window_tabLayout", 'right', 0)))
 
     # Create animation UI elements.
-    cmds.frameLayout("sip_FBXExporter_window_animationFrameLayout", collapse=False, label="", borderVisible=False,
+    cmds.frameLayout("sip_FBXExporter_window_animationFrameLayout", collapsable=False, label="", borderVisible=False,
                      parent="sip_FBXExporter_window_tabLayout")
     cmds.formLayout("sip_FBXExporter_window_animationFormLayout", numberOfDivisions=100,
                     parent="sip_FBXExporter_window_animationFrameLayout")
-    cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", width=250, height=325,
-                        numberOfRows=18,
-                        sc="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_PopulateAnimationExportNodesPanel()",
+    cmds.textScrollList("sip_FBXExporter_window_animationActorsTextScrollList", width=250, height=325, numberOfRows=18,
                         allowMultiSelection=False,
+                        sc="import FBXAnimationExporter as FBX\n"
+                           "FBX.SIP_FBXExporterUI_PopulateAnimationExportNodesPanel()",
                         parent="sip_FBXExporter_window_animationFormLayout")
     cmds.textScrollList("sip_FBXExporter_window_animationExportNodesTextScrollList", width=250, height=325,
                         numberOfRows=18, allowMultiSelection=False,
-                        sc="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_UpdateAnimationExportSettings()",
+                        sc="import FBXAnimationExporter as FBX\n"
+                           "FBX.SIP_FBXExporterUI_UpdateAnimationExportSettings()",
                         parent="sip_FBXExporter_window_animationFormLayout")
     cmds.button("sip_FBXExporter_window_animationNewExportNodeButton", width=250, height=50, label="New Export Node",
-                command="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_AnimationCreateNewExportNode()",
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_AnimationCreateNewExportNode()",
                 parent="sip_FBXExporter_window_animationFormLayout")
     cmds.checkBoxGrp("sip_FBXExporter_window_animationExportCheckBoxGrp", numberOfCheckBoxes=1, label="Export",
-                     columnWidth2=[85, 70], enable=False, parent="sip_FBXExporter_window_animationFormLayout")
+                     columnWidth2=[85, 70], enable=False,
+                     cc="import FBXAnimationExporter as FBX\n"
+                        "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
+                     parent="sip_FBXExporter_window_animationFormLayout")
     cmds.checkBoxGrp("sip_FBXExporter_window_animationZeroOriginCheckBoxGrp", numberOfCheckBoxes=1,
                      label="Move to Origin", columnWidth2=[85, 70], enable=False,
+                     cc="import FBXAnimationExporter as FBX\n"
+                        "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()\n"
+                        "FBX.SIP_FBXExporterUI_UpdateAnimationExportSettings()",
                      parent="sip_FBXExporter_window_animationFormLayout")
     cmds.checkBoxGrp("sip_FBXExporter_window_animationZeroOriginMotionCheckBoxGrp", numberOfCheckBoxes=1,
                      label="Zero Motion on Origin", columnWidth2=[120, 70], enable=False,
+                     cc="import FBXAnimationExporter as FBX\n"
+                        "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
                      parent="sip_FBXExporter_window_animationFormLayout")
-    cmds.checkBoxGrp("sip_FBXExporter_window_animationSubRangeCheckBoxGrp", numberOfCheckBoxes=1,
-                     label="Use Sub Range", columnWidth2=[85, 70], enable=False,
+    cmds.checkBoxGrp("sip_FBXExporter_window_animationSubRangeCheckBoxGrp", numberOfCheckBoxes=1, label="Use Sub Range",
+                     columnWidth2=[85, 70], enable=False,
+                     cc="import FBXAnimationExporter as FBX\n"
+                        "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()\n"
+                        "FBX.SIP_FBXExporterUI_UpdateAnimationExportSettings()",
                      parent="sip_FBXExporter_window_animationFormLayout")
-    cmds.floatFieldGrp("sip_FBXExporter_window_animationStartFrameFloatFieldGrp", numberOfFields=1, label="Start Frame",
+    cmds.floatFieldGrp("sip_FBXExporter_window_animationStartFrameFloatFieldGrp", numberOfFields=1, label='Start Frame',
                        columnWidth2=[75, 70], enable=False, value1=0.0,
+                       cc="import FBXAnimationExporter as FBX\n"
+                          "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
                        parent="sip_FBXExporter_window_animationFormLayout")
-    cmds.floatFieldGrp("sip_FBXExporter_window_animationEndFrameFloatFieldGrp", numberOfFields=1, label="End Frame",
+    cmds.floatFieldGrp("sip_FBXExporter_window_animationEndFrameFloatFieldGrp", numberOfFields=1, label='EndFrame',
                        columnWidth2=[75, 70], enable=False, value1=1.0,
+                       cc="import FBXAnimationExporter as FBX\n"
+                          "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
                        parent="sip_FBXExporter_window_animationFormLayout")
     cmds.textFieldButtonGrp("sip_FBXExporter_window_animationExportFileNameTextFieldButtonGrp",
                             label="Export File Name", columnWidth3=[100, 300, 30], enable=False, text='',
-                            buttonLabel="Browse", parent="sip_FBXExporter_window_animationFormLayout")
+                            buttonLabel='Browse',
+                            bc="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_BrowseExportFilename(1)",
+                            cc="import FBXAnimationExporter as FBX\n"
+                               "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
+                            parent="sip_FBXExporter_window_animationFormLayout")
     cmds.button("sip_FBXExporter_window_animationRecordAnimLayersButton", enable=False, width=150, height=50,
-                label="Record Anim Layers", backgroundColor=[1, .25, .25],
-                parent="sip_FBXExporter_window_animationFormLayout")
+                label="Record Anim Layers",
+                c="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_RecordAnimLayers()",
+                backgroundColor=[1, .25, .25], parent="sip_FBXExporter_window_animationFormLayout")
     cmds.button("sip_FBXExporter_window_animationPreviewAnimLayersButton", enable=False, width=250, height=50,
-                label="Preview Anim Layers", parent="sip_FBXExporter_window_animationFormLayout")
+                label="Preview Anim Layers",
+                c="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_PreviewAnimLayers()",
+                parent="sip_FBXExporter_window_animationFormLayout")
     cmds.button("sip_FBXExporter_window_animationClearAnimLayersButton", enable=False, width=250, height=50,
-                label="Clear Anim Layers", parent="sip_FBXExporter_window_animationFormLayout")
+                label="Clear Anim Layers",
+                c="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ClearAnimLayers()",
+                parent="sip_FBXExporter_window_animationFormLayout")
     cmds.text("sip_FBXExporter_window_animationActorText", label="Actors",
               parent="sip_FBXExporter_window_animationFormLayout")
     cmds.text("sip_FBXExporter_window_animationExportNodesText", label="Export Nodes",
               parent="sip_FBXExporter_window_animationFormLayout")
     cmds.button("sip_FBXExporter_window_animationExportSelectedAnimationButton", width=300, height=50,
-                label="Export Selected Animation", parent="sip_FBXExporter_window_animationFormLayout")
-    cmds.button("sip_FBXExporter_window_animationExportAllAnimationsForSelectedCharacterButton", width=300, height=50,
-                label="Export All Animation for Selected Character",
+                label="Export Selected Animation",
+                c="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ExportSelectedAnimation()",
                 parent="sip_FBXExporter_window_animationFormLayout")
+    cmds.button("sip_FBXExporter_window_animationExportAllAnimationsForSelectedCharacterButton", width=300, height=50,
+                c="import FBXAnimationExporter as FBX\n"
+                  "FBX.SIP_FBXExporterUI_ExportAllAnimationFromSelectedCharacter()",
+                label="Export All Animation for Selected Charater", parent="sip_FBXExporter_window_animationFormLayout")
     cmds.button("sip_FBXExporter_window_animationExportAllAnimationsButton", width=300, height=50,
-                label="Export All Animations", parent="sip_FBXExporter_window_animationFormLayout")
+                label="Export All Animations",
+                c="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ExportAllAnimation()",
+                parent="sip_FBXExporter_window_animationFormLayout")
 
     cmds.popupMenu("sip_FBXExporter_window_animationExportNodesPopupMenu", button=3,
                    parent="sip_FBXExporter_window_animationExportNodesTextScrollList")
     cmds.menuItem("sip_FBXExporter_window_animationSelectNodeMenuItem", label="Select",
+                  command="import FBXAnimationExporter as FBX\n"
+                          "FBX.SIP_FBXExporterUI_SelectExportNode"
+                          "(\"sip_FBXExporter_window_modelsExportNodesTextScrollList\")",
                   parent="sip_FBXExporter_window_animationExportNodesPopupMenu")
     cmds.menuItem("sip_FBXExporter_window_animationRenameNodeMenuItem", label="Rename",
+                  command="import FBXAnimationExporter as FBX\n"
+                          "FBX.SIP_FBXExporterUI_RenameExportNode_UI"
+                          "(\"sip_FBXExporter_window_animationExportNodesTextScrollList\")",
                   parent="sip_FBXExporter_window_animationExportNodesPopupMenu")
     cmds.menuItem("sip_FBXExporter_window_animationDeleteNodeMenuItem", label="Delete",
+                  command="import FBXAnimationExporter as FBX\n"
+                          "FBX.SIP_FBXExporterUI_DeleteExportNode"
+                          "(\"sip_FBXExporter_window_animationExportNodesTextScrollList\")",
                   parent="sip_FBXExporter_window_animationExportNodesPopupMenu")
 
     # Create model UI elements.
@@ -1066,27 +1195,27 @@ def SIP_FBXExporter_UI():
     cmds.textScrollList("sip_FBXExporter_window_modelsOriginTextScrollList", width=175, height=220, numberOfRows=18,
                         allowMultiSelection=False,
                         sc="import FBXAnimationExporter as FBX\n"
-                        "SIP_FBXExporterUI_PopulateModelsExportNodesPanel()",
+                        "FBX.SIP_FBXExporterUI_PopulateModelsExportNodesPanel()",
                         parent="sip_FBXExporter_window_modelFormLayout")
     cmds.textScrollList("sip_FBXExporter_window_modelsExportNodesTextScrollList", width=175, height=220,
                         numberOfRows=18, allowMultiSelection=False,
                         sc="import FBXAnimationExporter as FBX\n"
-                        "SIP_FBXExporterUI_PopulateGeomPanel()\nSIP_FBXExporterUI_UpdateModelExportSettings()",
+                        "FBX.SIP_FBXExporterUI_PopulateGeomPanel()\nFBX.SIP_FBXExporterUI_UpdateModelExportSettings()",
                         parent="sip_FBXExporter_window_modelFormLayout")
     cmds.textScrollList("sip_FBXExporter_window_modelsGeomTextScrollList", width=175, height=220, numberOfRows=18,
                         allowMultiSelection=True, parent="sip_FBXExporter_window_modelFormLayout")
     cmds.button("sip_FBXExporter_window_modelTagAsOriginButton", width=175, height=50, label="Tag as Origin",
-                command="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_ModelTagForOrigin",
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ModelTagForOrigin",
                 parent="sip_FBXExporter_window_modelFormLayout")
     cmds.button("sip_FBXExporter_window_modelNewExportNodeButton", width=175, height=50, label="New Export Node",
                 parent="sip_FBXExporter_window_modelFormLayout",
-                command="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_ModelCreateNewExportNode()")
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ModelCreateNewExportNode()")
     cmds.button("sip_FBXExporter_window_modelAddRemoveMeshesButton", width=175, height=50, label="Add/Remove Meshes",
-                command="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_ModelAddRemoveMeshes()",
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ModelAddRemoveMeshes()",
                 parent="sip_FBXExporter_window_modelFormLayout")
     cmds.checkBoxGrp("sip_FBXExporter_window_modelExportCheckBoxGrp", numberOfCheckBoxes=1, label="Export",
                      columnWidth2=[85, 70], enable=False,
-                     cc="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_UpdateExportNodeFromModelSettings()",
+                     cc="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_UpdateExportNodeFromModelSettings()",
                      parent="sip_FBXExporter_window_modelFormLayout")
     cmds.text("sip_FBXExporter_window_modelOriginText", label="Root Joints",
               parent="sip_FBXExporter_window_modelFormLayout")
@@ -1096,34 +1225,35 @@ def SIP_FBXExporter_UI():
               parent="sip_FBXExporter_window_modelFormLayout")
     cmds.textFieldButtonGrp("sip_FBXExporter_window_modelExportFileNameTextFieldButtonGrp",
                             label="Export File Name",
-                            bc="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_BrowseExportFilename(2)",
-                            cc="import FBXAnimationExporter as FBX\n"
-                               "SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
                             columnWidth3=[100, 300, 30], enable=False, text='',
-                            buttonLabel="Browse", parent="sip_FBXExporter_window_modelFormLayout")
+                            buttonLabel="Browse",
+                            bc="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_BrowseExportFilename(2)",
+                            cc="import FBXAnimationExporter as FBX\n"
+                               "FBX.SIP_FBXExporterUI_UpdateExportNodeFromAnimationSettings()",
+                            parent="sip_FBXExporter_window_modelFormLayout")
     cmds.button("sip_FBXExporter_window_modelExportMeshButton", width=175, height=50, label="Export Selected Character",
-                command="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_ModelExportSelectedCharacter()",
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ModelExportSelectedCharacter()",
                 parent="sip_FBXExporter_window_modelFormLayout")
     cmds.button("sip_FBXExporter_window_modelExportAllMeshesButton", width=250, height=50,
                 label="Export All Characters",
-                command="import FBXAnimationExporter as FBX\nSIP_FBXExporterUI_ModelExportAllCharacters()",
+                command="import FBXAnimationExporter as FBX\nFBX.SIP_FBXExporterUI_ModelExportAllCharacters()",
                 parent="sip_FBXExporter_window_modelFormLayout")
 
     cmds.popupMenu("sip_FBXExporter_window_modelExportNodesPopupMenu", button=3,
                    parent="sip_FBXExporter_window_modelsExportNodesTextScrollList")
     cmds.menuItem("sip_FBXExporter_window_modelSelectNodeMenuItem", label="Select",
                   command="import FBXAnimationExporter as FBX\n"
-                          "SIP_FBXExporterUI_SelectExportNode"
+                          "FBX.SIP_FBXExporterUI_SelectExportNode"
                           "(\"sip_FBXExporter_window_modelsExportNodesTextScrollList\")",
                   parent="sip_FBXExporter_window_modelExportNodesPopupMenu")
     cmds.menuItem("sip_FBXExporter_window_modelRenameNodeMenuItem", label="Rename",
                   command="import FBXAnimationExporter as FBX\n"
-                          "SIP_FBXExporterUI_RenameExportNode_UI"
+                          "FBX.SIP_FBXExporterUI_RenameExportNode_UI"
                           "(\"sip_FBXExporter_window_modelsExportNodesTextScrollList\")",
                   parent="sip_FBXExporter_window_modelExportNodesPopupMenu")
     cmds.menuItem("sip_FBXExporter_window_modelDeleteNodeMenuItem", label="Delete",
                   command="import FBXAnimationExporter as FBX\n"
-                          "SIP_FBXExporterUI_DeleteExportNode"
+                          "FBX.SIP_FBXExporterUI_DeleteExportNode"
                           "(\"sip_FBXExporter_window_modelsExportNodesTextScrollList\")",
                   parent="sip_FBXExporter_window_modelExportNodesPopupMenu")
 
@@ -1297,10 +1427,10 @@ def SIP_FBXExporter_UI():
     # scriptJob to refresh ui
     cmds.scriptJob(parent="sip_FBXExporter_window",
                    e=["PostSceneRead", "import FBXAnimationExporter as FBX\n"
-                                       "SIP_FBXExporterUI_PopulateModelRootJointsPanel()"])
+                                       "FBX.SIP_FBXExporterUI_PopulateModelRootJointsPanel()"])
     cmds.scriptJob(parent="sip_FBXExporter_window",
                    e=["PostSceneRead", "import FBXAnimationExporter as FBX\n"
-                                       "SIP_FBXExporterUI_PopulateAnimationActorPanel()"])
+                                       "FBX.SIP_FBXExporterUI_PopulateAnimationActorPanel()"])
 
 
 
